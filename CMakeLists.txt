@@ -8,15 +8,14 @@ set(VERSION "1.2.11")
 option(ASM686 "Enable building i686 assembly implementation")
 option(AMD64 "Enable building amd64 assembly implementation")
 
-set(INSTALL_BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Installation directory for executables")
-set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Installation directory for libraries")
-set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation directory for headers")
-set(INSTALL_MAN_DIR "${CMAKE_INSTALL_PREFIX}/share/man" CACHE PATH "Installation directory for manual pages")
-set(INSTALL_PKGCONFIG_DIR "${CMAKE_INSTALL_PREFIX}/share/pkgconfig" CACHE PATH "Installation directory for pkgconfig (.pc) files")
+set(INSTALL_BIN_DIR "bin" CACHE PATH "Installation directory for executables")
+set(INSTALL_LIB_DIR "lib" CACHE PATH "Installation directory for libraries")
+set(INSTALL_INC_DIR "include" CACHE PATH "Installation directory for headers")
+set(INSTALL_MAN_DIR "share/man" CACHE PATH "Installation directory for manual pages")
+set(INSTALL_PKGCONFIG_DIR "share/pkgconfig" CACHE PATH "Installation directory for pkgconfig (.pc) files")
 
 if (WINCE)
 	find_package(wcecompat REQUIRED)
-	include_directories(${WCECOMPAT_INCLUDE_DIRS})
 endif()
 
 include(CheckTypeSize)
@@ -79,16 +78,9 @@ if (IOS OR EMSCRIPTEN)
 endif()
 
 set(CMAKE_DEBUG_POSTFIX "_d")
-if(MSVC)
-    add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
-    add_definitions(-D_CRT_NONSTDC_NO_DEPRECATE)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-endif()
 
 configure_file(	${CMAKE_CURRENT_SOURCE_DIR}/zconf.h.cmakein
 		${CMAKE_CURRENT_BINARY_DIR}/zconf.h @ONLY)
-include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR})
-
 
 #============================================================================
 # zlib
@@ -172,11 +164,13 @@ string(REGEX REPLACE ".*#define[ \t]+ZLIB_VERSION[ \t]+\"([-0-9A-Za-z.]+)\".*"
     "\\1" ZLIB_FULL_VERSION ${_zlib_h_contents})
 
 if(BUILD_SHARED_LIBS)
-    set(ZLIB_NAME zlib-${ZLIB_FULL_VERSION}-shared)
+    #set(ZLIB_NAME zlib-${ZLIB_FULL_VERSION}-shared)
+    set(ZLIB_NAME zlib)
     set(ZLIB_DEFINITIONS "-DZLIB_DLL")
     set(ZLIB_COMPILE_DEFINITIONS "ZLIB_DLL")
 else()
-    set(ZLIB_NAME zlib-${ZLIB_FULL_VERSION}-static)
+    #set(ZLIB_NAME zlib-${ZLIB_FULL_VERSION}-static)
+    set(ZLIB_NAME zlib)
     set(ZLIB_DEFINITIONS "")
     set(ZLIB_COMPILE_DEFINITIONS "")
 endif()
@@ -186,8 +180,19 @@ if(NOT BUILD_SHARED_LIBS)
 endif()
 
 add_library(${ZLIB_NAME} ${ZLIB_SRCS} ${ZLIB_ASMS} ${ZLIB_DLL_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS})
+
+target_include_directories(${ZLIB_NAME}
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    PUBLIC $<INSTALL_INTERFACE:include>
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 if (WINCE)
-	target_link_libraries(${ZLIB_NAME} ${WCECOMPAT_LIBRARIES})
+	target_include_directories(${ZLIB_NAME} PRIVATE ${WCECOMPAT_INCLUDE_DIRS})
+	target_link_libraries(${ZLIB_NAME} PRIVATE ${WCECOMPAT_LIBRARIES})
+endif()
+
+if(MSVC)
+    target_compile_definitions(${ZLIB_NAME} PRIVATE -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE)
 endif()
 
 if(BUILD_SHARED_LIBS)
@@ -200,7 +205,7 @@ set_target_properties(${ZLIB_NAME} PROPERTIES
     VERSION ${ZLIB_FULL_VERSION})
 
 if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL )
-    install(TARGETS ${ZLIB_NAME}
+    install(TARGETS ${ZLIB_NAME} EXPORT zlib-targets
         RUNTIME DESTINATION "${INSTALL_BIN_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" )
@@ -213,8 +218,9 @@ if(NOT SKIP_INSTALL_FILES AND NOT SKIP_INSTALL_ALL )
 endif()
 if(NOT SKIP_INSTALL_FILES AND NOT SKIP_INSTALL_ALL )
     configure_file(ZLIBConfig.cmake.in ZLIBConfig.cmake @ONLY)
-    configure_file(ZLIBConfigVersion.cmake.in ZLIBConfigVersion.cmake @ONLY)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ZLIBConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/ZLIBConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_PREFIX})
+    #configure_file(ZLIBConfigVersion.cmake.in ZLIBConfigVersion.cmake @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ZLIBConfig.cmake DESTINATION lib/cmake/ZLIB)
+    install(EXPORT zlib-targets DESTINATION lib/cmake/ZLIB NAMESPACE ::)
 endif()
 
 #============================================================================
